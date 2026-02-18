@@ -1,0 +1,52 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  /* font-family: Courier; */
+  /* font-family: Helvetica, Arial, sans-serif; */
+  /* font-family: "Source Sans Pro", "Arial", sans-serif; */
+  /* font-family: Ebrima; */
+  font-family: "Lato", sans-serif;
+  box-shadow: none;
+}
+hr {
+  border-top: 1px solid #ebedf0;
+}
+.ant-layout-sider {
+  z-index: 1000;
+}
+
+.ant-layout-header {
+  z-index: 999;
+}
+.brand {
+  font-family: "Lexend", sans-serif;
+  font-size: 18px;
+}
+path:hover {
+  fill: #1f4d76;
+  /* opacity: 0.5; */
+  transform: scale(1.008);
+}
+path {
+  transition: transform 0.3s;
+}
+
+table {
+  font-family: "Lato", sans-serif;
+  /* border-collapse: collapse; */
+  width: 100%;
+}
+
+th {
+  text-align: left;
+  padding: 18px;
+}
+td {
+  border: 2px solid #ebedf0;
+  text-align: left;
+  padding: 8px;
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+}

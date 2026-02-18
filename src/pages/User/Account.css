@@ -1,0 +1,114 @@
+.account-page {
+  padding: 16px;
+}
+
+.account-tabs .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+
+.account-left-card,
+.account-form-card {
+  border-radius: 14px;
+  min-height: 100%;
+}
+
+.account-left-card .ant-card-body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.account-avatar-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.account-photo-uploader {
+  width: 170px;
+  height: 170px;
+  margin: 4px auto 0;
+  border-radius: 50%;
+  position: relative;
+  cursor: pointer;
+}
+
+.account-photo-uploader .ant-avatar {
+  width: 170px !important;
+  height: 170px !important;
+}
+
+.account-photo-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.42);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  font-weight: 600;
+}
+
+.account-photo-uploader:hover .account-photo-overlay {
+  opacity: 1;
+}
+
+.account-upload-text {
+  text-align: center;
+  display: block;
+  margin-top: 16px;
+  line-height: 1.6;
+}
+
+.account-public-row {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+}
+
+.account-delete-btn {
+  margin-top: 20px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.account-save-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+@media (max-width: 992px) {
+  .account-page {
+    padding: 12px;
+  }
+
+  .account-left-card,
+  .account-form-card {
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 576px) {
+  .account-page {
+    padding: 10px;
+  }
+
+  .account-save-row {
+    justify-content: stretch;
+  }
+
+  .account-save-btn {
+    width: 100%;
+  }
+}
