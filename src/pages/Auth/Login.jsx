@@ -5,7 +5,7 @@ const { Title, Text } = Typography;
 
 const DEMO_CREDENTIALS = {
   username: "admin",
-  password: "admin123",
+  password: "123",
 };
 
 function Login() {
@@ -66,7 +66,7 @@ function Login() {
           </Button>
 
           <Text type="secondary" style={{ display: "block", marginTop: 10 }}>
-            Demo: admin / admin123
+            Demo: admin / 123
           </Text>
         </Form>
       </Card>

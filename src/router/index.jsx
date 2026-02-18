@@ -4,7 +4,7 @@ import Users from "../pages/User/Users";
 import Account from "../pages/User/Account";
 import TeamOne from "./../pages/Team/TeamOne/TeamOne";
 import TeamTwo from "./../pages/Team/TeamTwo/TeamTwo";
-import Files from "./../pages/Files/Files";
+// import Files from "./../pages/Files/Files";
 import Report from "../pages/Report/Report";
 import Login from "../pages/Auth/Login";
 
@@ -31,7 +31,7 @@ function Router({ isAuthenticated }) {
       <Route path="/user/account" element={guard(<Account />)} />
       <Route path="/TeamOne" element={guard(<TeamOne />)} />
       <Route path="/TeamTwo" element={guard(<TeamTwo />)} />
-      <Route path="/Files" element={guard(<Files />)} />
+      {/* <Route path="/Files" element={guard(<Files />)} /> */}
       <Route
         path="*"
         element={

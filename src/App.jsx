@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Layout, Menu, Avatar, Dropdown, Button, Drawer, Grid } from "antd";
 import {
   LogoutOutlined,
-  FileOutlined,
+  // FileOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   RedEnvelopeOutlined,
@@ -23,7 +23,7 @@ function getItem(label, key, icon, children) {
 
 const items = [
   getItem(<Link to={"/report"}>Report</Link>, "5", <RedEnvelopeOutlined />),
-  getItem(<Link to={"/Files"}>Files</Link>, "11", <FileOutlined />),
+  // getItem(<Link to={"/Files"}>Files</Link>, "11", <FileOutlined />),
 
   getItem("User", "sub1", <UserOutlined />, [
     getItem(<Link to={"/user/users"}>Foydalanuvchilar</Link>, "31"),
