@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { MoreOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import { MoreOutlined, UserOutlined } from "@ant-design/icons";
 import {
+  Avatar,
   Button,
   Card,
   Col,
@@ -11,60 +12,35 @@ import {
   Modal,
   Row,
   Select,
+  Spin,
   Space,
   Table,
   Typography,
   message,
 } from "antd";
+import {
+  createUserApi,
+  deleteUserApi,
+  getUsersApi,
+  updateUserApi,
+} from "../../api/users.api";
+import { API_BASE_URL } from "../../api/axios";
 
 const { Title, Text } = Typography;
 
-const INITIAL_USERS = [
-  {
-    id: 1,
-    fullName: "Nu'monov Tohir",
-    role: "Administrator",
-    email: "numonovtokhir@gmail.com",
-    status: "Faol",
-    phone: "+998 90 123 45 67",
-  },
-  {
-    id: 2,
-    fullName: "Solijonov Muxammadjon",
-    role: "Operator",
-    email: "muhsdev@gmail.com",
-    status: "Faol",
-    phone: "+998 91 555 66 77",
-  },
-  {
-    id: 3,
-    fullName: "Bosimbekov Hojiakbar",
-    role: "Analitik",
-    email: "xbosimbekov@gmail.com",
-    status: "Faol emas",
-    phone: "+998 99 700 80 90",
-  },
-  {
-    id: 4,
-    fullName: "Nuriddin Muhammadjanov",
-    role: "Operator",
-    email: "nmuhammadjanov@gmail.com",
-    status: "Faol",
-    phone: "+998 93 777 88 99",
-  },
-];
+const ROLE_OPTIONS = ["admin", "manager", "boss", "worker"];
 
-const getStatusStyle = (status) => {
-  switch (status) {
-    case "Faol":
-      return { color: "#52c41a", background: "#f6ffed", border: "#b7eb8f" };
-    case "Faol emas":
-      return { color: "#d9d9d9", background: "#f5f5f5", border: "#d9d9d9" };
-    default:
-      return { color: "#d9d9d9", background: "#f5f5f5", border: "#d9d9d9" };
-  }
+const statusColor = {
+  Faol: { color: "#389e0d", background: "#f6ffed", border: "#b7eb8f" },
+  Faolsiz: { color: "#cf1322", background: "#fff1f0", border: "#ffa39e" },
 };
 
+const getStatusStyle = (status) =>
+  statusColor[status] || {
+    color: "#595959",
+    background: "#fafafa",
+    border: "#d9d9d9",
+  };
 const renderStatusPill = (status) => {
   const style = getStatusStyle(status);
   return (
@@ -81,19 +57,69 @@ const renderStatusPill = (status) => {
   );
 };
 
+const resolveAvatarUrl = (value) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const raw = String(value).trim();
+
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("blob:") ||
+    raw.startsWith("data:")
+  ) {
+    return raw;
+  }
+
+  return `${API_BASE_URL}${raw.startsWith("/") ? "" : "/"}${raw}`;
+};
+
+const normalizeUser = (item) => ({
+  id: item?.id ?? item?._id,
+  fullName: item?.fullName || "",
+  role: item?.role || "",
+  email: item?.email || "",
+  status: item?.status === true ? "Faol" : "Faolsiz",
+  phone: item?.phone || "",
+  avatarUrl: resolveAvatarUrl(
+    item?.avatarUrl || item?.avatar || item?.url || item?.profileImage,
+  ),
+});
+
+const toApiStatus = (value) => value === "Faol";
+
 function Users() {
   const screens = Grid.useBreakpoint();
   const isTabletOrMobile = !screens.lg;
   const [form] = Form.useForm();
-  const [users, setUsers] = useState(INITIAL_USERS);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const data = await getUsersApi();
+      setUsers(data.map(normalizeUser));
+    } catch {
+      message.error("Foydalanuvchilarni yuklashda xatolik");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
   const handleAdd = () => {
     setEditingUser(null);
     form.resetFields();
-    form.setFieldsValue({ status: "Faol", role: "Operator" });
+    form.setFieldsValue({ status: "Faol", role: "worker" });
     setOpen(true);
   };
 
@@ -103,8 +129,9 @@ function Users() {
     setOpen(true);
   };
 
-  const handleDelete = (id) => {
-    setUsers((prev) => prev.filter((item) => item.id !== id));
+  const handleDelete = async (id) => {
+    await deleteUserApi(id);
+    await loadUsers();
     message.success("Foydalanuvchi o‘chirildi");
   };
 
@@ -112,25 +139,31 @@ function Users() {
     try {
       setSaving(true);
       const values = await form.validateFields();
+      const payload = {
+        fullName: values.fullName,
+        role: values.role,
+        email: values.email,
+        status: toApiStatus(values.status),
+        phone: values.phone,
+      };
 
       if (editingUser) {
-        setUsers((prev) =>
-          prev.map((item) =>
-            item.id === editingUser.id ? { ...item, ...values } : item,
-          ),
-        );
+        await updateUserApi(editingUser.id, payload);
         message.success("Foydalanuvchi yangilandi");
       } else {
-        const nextId = users.length
-          ? Math.max(...users.map((item) => item.id)) + 1
-          : 1;
-        setUsers((prev) => [...prev, { id: nextId, ...values }]);
+        await createUserApi(payload);
         message.success("Yangi foydalanuvchi qo‘shildi");
       }
+
+      await loadUsers();
 
       setOpen(false);
       setEditingUser(null);
       form.resetFields();
+    } catch (error) {
+      if (!error?.errorFields) {
+        message.error("Saqlashda xatolik");
+      }
     } finally {
       setSaving(false);
     }
@@ -155,7 +188,13 @@ function Users() {
             okText: "Ha",
             cancelText: "Yo‘q",
             okButtonProps: { danger: true },
-            onOk: () => handleDelete(record.id),
+            onOk: async () => {
+              try {
+                await handleDelete(record.id);
+              } catch {
+                message.error("O‘chirishda xatolik");
+              }
+            },
           });
         },
       }}
@@ -169,6 +208,15 @@ function Users() {
   );
 
   const columns = [
+    {
+      title: "Avatar",
+      dataIndex: "avatarUrl",
+      key: "avatarUrl",
+      width: 60,
+      render: (avatarUrl) => (
+        <Avatar src={avatarUrl} icon={<UserOutlined />} size={38} />
+      ),
+    },
     {
       title: "Ism familiya",
       dataIndex: "fullName",
@@ -234,55 +282,81 @@ function Users() {
         </div>
 
         {isTabletOrMobile ? (
-          <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
-            {users.map((item) => (
-              <Card key={item.id} style={{ borderRadius: 12 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  <Title level={5} style={{ margin: 0 }}>
-                    {item.fullName}
-                  </Title>
+          loading ? (
+            <div
+              style={{
+                marginTop: 16,
+                minHeight: 220,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Spin size="large" />
+            </div>
+          ) : (
+            <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+              {users.map((item) => (
+                <Card key={item.id} style={{ borderRadius: 12 }}>
                   <div
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      marginBottom: 8,
                     }}
                   >
-                    {renderStatusPill(item.status)}
-                    {renderActionMenu(item)}
+                    <Space size={10} align="start">
+                      <Avatar
+                        src={item.avatarUrl}
+                        icon={<UserOutlined />}
+                        size={44}
+                      />
+                      <Title level={5} style={{ margin: 0 }}>
+                        {item.fullName}
+                      </Title>
+                    </Space>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      {renderStatusPill(item.status)}
+                      {renderActionMenu(item)}
+                    </div>
                   </div>
-                </div>
 
-                <Space direction="vertical" size={5} style={{ width: "100%" }}>
-                  <Text>
-                    <strong>Lavozim:</strong> {item.role}
-                  </Text>
-                  <Text>
-                    <strong>Email:</strong> {item.email}
-                  </Text>
-                  <Text>
-                    <strong>Nomeri:</strong> {item.phone}
-                  </Text>
-                </Space>
-              </Card>
-            ))}
-          </div>
+                  <Space
+                    direction="vertical"
+                    size={5}
+                    style={{ width: "100%" }}
+                  >
+                    <Text>
+                      <strong>Lavozim:</strong> {item.role}
+                    </Text>
+                    <Text>
+                      <strong>Email:</strong> {item.email}
+                    </Text>
+                    <Text>
+                      <strong>Nomeri:</strong> {item.phone}
+                    </Text>
+                  </Space>
+                </Card>
+              ))}
+            </div>
+          )
         ) : (
           <Table
             style={{ marginTop: 16 }}
             columns={columns}
             dataSource={users}
+            loading={loading}
             rowKey="id"
             pagination={{ pageSize: 6, showSizeChanger: false }}
-            scroll={{ x: 960 }}
+            scroll={{ x: 1050 }}
           />
         )}
 
@@ -322,11 +396,10 @@ function Users() {
                   rules={[{ required: true, message: "Lavozimni kiriting" }]}
                 >
                   <Select
-                    options={[
-                      { value: "Administrator", label: "Administrator" },
-                      { value: "Operator", label: "Operator" },
-                      { value: "Analitik", label: "Analitik" },
-                    ]}
+                    options={ROLE_OPTIONS.map((role) => ({
+                      value: role,
+                      label: role,
+                    }))}
                   />
                 </Form.Item>
               </Col>
@@ -340,7 +413,7 @@ function Users() {
                   <Select
                     options={[
                       { value: "Faol", label: "Faol" },
-                      { value: "Faol emas", label: "Faol emas" },
+                      { value: "Faolsiz", label: "Faolsiz" },
                     ]}
                   />
                 </Form.Item>

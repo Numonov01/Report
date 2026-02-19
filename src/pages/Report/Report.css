@@ -31,6 +31,13 @@
   overflow: hidden;
 }
 
+.report-loading-wrap {
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .mobile-report-list {
   display: grid;
   grid-template-columns: 1fr;

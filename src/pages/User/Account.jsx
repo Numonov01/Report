@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Avatar,
   Button,
@@ -7,9 +7,7 @@ import {
   Form,
   Input,
   Row,
-  Select,
   Space,
-  Switch,
   Tabs,
   Typography,
   Upload,
@@ -18,36 +16,214 @@ import {
 import {
   CameraOutlined,
   SafetyOutlined,
+  TeamOutlined,
+  ToolOutlined,
   UserOutlined,
+  SolutionOutlined,
 } from "@ant-design/icons";
+import {
+  deleteAccountAvatarApi,
+  getAccountMeApi,
+  updateAccountMeApi,
+  updateAccountPasswordApi,
+  uploadAccountAvatarApi,
+} from "../../api/account.api";
+import { API_BASE_URL } from "../../api/axios";
 import "./Account.css";
 
 const { Text } = Typography;
 
+const resolveAvatarUrl = (value) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const raw = String(value).trim();
+
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("blob:") ||
+    raw.startsWith("data:")
+  ) {
+    return raw;
+  }
+
+  return `${API_BASE_URL}${raw.startsWith("/") ? "" : "/"}${raw}`;
+};
+
+const extractAvatarValue = (value) =>
+  value?.avatarUrl ||
+  value?.avatar ||
+  value?.url ||
+  value?.avatarPath ||
+  value?.profileImage ||
+  null;
+
+const ROLE_META = {
+  admin: {
+    icon: <SafetyOutlined />,
+    label: "Admin",
+    className: "role-admin",
+  },
+  manager: {
+    icon: <TeamOutlined />,
+    label: "Manager",
+    className: "role-manager",
+  },
+  boss: {
+    icon: <SolutionOutlined />,
+    label: "Boss",
+    className: "role-boss",
+  },
+  worker: {
+    icon: <ToolOutlined />,
+    label: "Worker",
+    className: "role-worker",
+  },
+};
+
 function Account() {
   const [form] = Form.useForm();
   const [securityForm] = Form.useForm();
-  const [avatarUrl, setAvatarUrl] = useState("/Boy.png");
-  const [publicProfile, setPublicProfile] = useState(true);
+  const [avatarUrl, setAvatarUrl] = useState(undefined);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletingAvatar, setDeletingAvatar] = useState(false);
+  const [accountRole, setAccountRole] = useState("worker");
+  const [avatarRawValue, setAvatarRawValue] = useState(null);
+  const normalizedRole = String(accountRole || "worker").toLowerCase();
+  const roleMeta = ROLE_META[normalizedRole] || ROLE_META.worker;
 
-  const onSave = async () => {
-    await form.validateFields();
-    message.success("O‘zgarishlar saqlandi");
+  useEffect(() => {
+    const loadAccount = async () => {
+      try {
+        const data = await getAccountMeApi();
+        form.setFieldsValue({
+          fullName: data?.fullName || "",
+          email: data?.email || "",
+          phone: data?.phone || "",
+          workPlace: data?.workPlace || data?.workplace || "",
+          about: data?.about || "",
+        });
+        setAccountRole(data?.role || "worker");
+        const rawAvatar = extractAvatarValue(data);
+        setAvatarRawValue(rawAvatar);
+        setAvatarUrl(resolveAvatarUrl(rawAvatar));
+      } catch {
+        message.error("Akkaunt ma’lumotlarini yuklashda xatolik");
+      }
+    };
+
+    loadAccount();
+  }, [form]);
+
+  const onSave = async (values) => {
+    try {
+      setSavingProfile(true);
+
+      let safeAvatarValue = avatarRawValue;
+      if (!safeAvatarValue) {
+        const latest = await getAccountMeApi();
+        safeAvatarValue = extractAvatarValue(latest);
+        if (safeAvatarValue) {
+          setAvatarRawValue(safeAvatarValue);
+          setAvatarUrl(resolveAvatarUrl(safeAvatarValue));
+        }
+      }
+
+      const payload = {
+        fullName: values.fullName,
+        email: values.email,
+        phone: values.phone,
+        workPlace: values.workPlace || "",
+        about: values.about || "",
+      };
+
+      if (safeAvatarValue) {
+        payload.avatarUrl = safeAvatarValue;
+        payload.avatar = safeAvatarValue;
+      }
+
+      await updateAccountMeApi(payload);
+      message.success("O‘zgarishlar saqlandi");
+    } catch (error) {
+      if (!error?.errorFields) {
+        const apiMessage =
+          error?.response?.data?.message || "Saqlashda xatolik";
+        message.error(apiMessage);
+      }
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
-  const onPasswordSave = async () => {
-    await securityForm.validateFields();
-    message.success("Parol yangilandi");
-    securityForm.resetFields();
+  const onPasswordSave = async (values) => {
+    try {
+      setSavingPassword(true);
+      await updateAccountPasswordApi({
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
+        confirmPassword: values.confirmPassword,
+      });
+      message.success("Parol yangilandi");
+      securityForm.resetFields();
+    } catch (error) {
+      if (!error?.errorFields) {
+        const apiMessage =
+          error?.response?.data?.message || "Parolni yangilashda xatolik";
+        message.error(apiMessage);
+      }
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
-  const handleAvatarChange = ({ file }) => {
-    if (!file?.originFileObj) {
+  const handleAvatarUpload = async ({ file, onSuccess, onError }) => {
+    if (!file) {
       return;
     }
-    const localUrl = URL.createObjectURL(file.originFileObj);
-    setAvatarUrl(localUrl);
-    message.success("Rasm yangilandi");
+
+    try {
+      setUploadingAvatar(true);
+      const localUrl = URL.createObjectURL(file);
+      setAvatarUrl(localUrl);
+      const data = await uploadAccountAvatarApi(file);
+      console.log("[account/avatar] upload response:", data);
+      let rawAvatar = extractAvatarValue(data);
+
+      if (!rawAvatar) {
+        const refreshed = await getAccountMeApi();
+        rawAvatar = extractAvatarValue(refreshed);
+      }
+
+      setAvatarRawValue(rawAvatar);
+      setAvatarUrl(resolveAvatarUrl(rawAvatar) || localUrl);
+      message.success("Rasm yangilandi");
+      onSuccess?.(data, file);
+    } catch (error) {
+      const apiMessage =
+        error?.response?.data?.message || "Rasm yuklashda xatolik";
+      message.error(apiMessage);
+      onError?.(error);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleAvatarDelete = async () => {
+    try {
+      setDeletingAvatar(true);
+      await deleteAccountAvatarApi();
+      setAvatarRawValue(null);
+      setAvatarUrl(undefined);
+      message.success("Rasm o‘chirildi");
+    } catch {
+      message.error("Rasmni o‘chirishda xatolik");
+    } finally {
+      setDeletingAvatar(false);
+    }
   };
 
   return (
@@ -71,8 +247,8 @@ function Account() {
                     <Upload
                       accept=".jpeg,.jpg,.png,.gif"
                       showUploadList={false}
-                      beforeUpload={() => false}
-                      onChange={handleAvatarChange}
+                      disabled={uploadingAvatar}
+                      customRequest={handleAvatarUpload}
                     >
                       <div className="account-photo-uploader" role="button">
                         <Avatar
@@ -93,34 +269,27 @@ function Account() {
                       max size of 3 Mb
                     </Text>
 
-                    <div className="account-public-row">
-                      <Text>Public profile</Text>
-                      <Switch
-                        checked={publicProfile}
-                        onChange={setPublicProfile}
-                      />
-                    </div>
+                    <Text
+                      className={`account-role-badge ${roleMeta.className}`}
+                    >
+                      {roleMeta.icon}
+                      <span>{roleMeta.label}</span>
+                    </Text>
 
-                    <Button danger className="account-delete-btn">
-                      Delete user
+                    <Button
+                      danger
+                      className="account-delete-btn"
+                      loading={deletingAvatar}
+                      onClick={handleAvatarDelete}
+                    >
+                      Delete avatar
                     </Button>
                   </Card>
                 </Col>
 
                 <Col xs={24} lg={16}>
                   <Card className="account-form-card" bordered={false}>
-                    <Form
-                      form={form}
-                      layout="vertical"
-                      initialValues={{
-                        fullName: "Numonov Tohir",
-                        email: "numonovtokhir@gmail.com",
-                        phone: "+998 90 123 45 67",
-                        role: "Administrator",
-                        about:
-                          "Praesent turpis. Phasellus viverra nulla ut metus varius laoreet. Phasellus tempus.",
-                      }}
-                    >
+                    <Form form={form} layout="vertical" onFinish={onSave}>
                       <Row gutter={[12, 4]}>
                         <Col xs={24} md={12}>
                           <Form.Item
@@ -136,30 +305,6 @@ function Account() {
                             <Input />
                           </Form.Item>
                         </Col>
-                        <Col xs={24} md={12}>
-                          <Form.Item
-                            label="Role"
-                            name="role"
-                            rules={[
-                              {
-                                required: true,
-                                message: "Role tanlang",
-                              },
-                            ]}
-                          >
-                            <Select
-                              options={[
-                                {
-                                  value: "Administrator",
-                                  label: "Administrator",
-                                },
-                                { value: "Operator", label: "Operator" },
-                                { value: "Analitik", label: "Analitik" },
-                              ]}
-                            />
-                          </Form.Item>
-                        </Col>
-
                         <Col xs={24} md={12}>
                           <Form.Item
                             label="Nomer"
@@ -187,6 +332,12 @@ function Account() {
                           </Form.Item>
                         </Col>
 
+                        <Col xs={24} md={12}>
+                          <Form.Item label="Ish joyi" name="workPlace">
+                            <Input />
+                          </Form.Item>
+                        </Col>
+
                         <Col xs={24}>
                           <Form.Item label="About" name="about">
                             <Input.TextArea rows={5} />
@@ -198,7 +349,8 @@ function Account() {
                         <Button
                           type="primary"
                           size="large"
-                          onClick={onSave}
+                          htmlType="submit"
+                          loading={savingProfile}
                           className="account-save-btn"
                         >
                           Saqlash
@@ -220,7 +372,11 @@ function Account() {
             ),
             children: (
               <Card bordered={false} className="account-form-card">
-                <Form form={securityForm} layout="vertical">
+                <Form
+                  form={securityForm}
+                  layout="vertical"
+                  onFinish={onPasswordSave}
+                >
                   <Row gutter={[12, 4]}>
                     <Col xs={24} md={12}>
                       <Form.Item
@@ -288,7 +444,8 @@ function Account() {
                     <Button
                       type="primary"
                       size="large"
-                      onClick={onPasswordSave}
+                      htmlType="submit"
+                      loading={savingPassword}
                     >
                       Parolni yangilash
                     </Button>

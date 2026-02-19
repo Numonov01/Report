@@ -67,6 +67,41 @@
   line-height: 1.6;
 }
 
+.account-role-badge {
+  margin-top: 8px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.account-role-badge.role-admin {
+  background: #f0f5ff;
+  color: #1d39c4;
+  border-color: #adc6ff;
+}
+
+.account-role-badge.role-manager {
+  background: #e6fffb;
+  color: #006d75;
+  border-color: #87e8de;
+}
+
+.account-role-badge.role-boss {
+  background: #fff7e6;
+  color: #ad6800;
+  border-color: #ffd591;
+}
+
+.account-role-badge.role-worker {
+  background: #f6ffed;
+  color: #237804;
+  border-color: #b7eb8f;
+}
+
 .account-public-row {
   margin-top: 24px;
   display: flex;

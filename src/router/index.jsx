@@ -6,9 +6,9 @@ import TeamOne from "./../pages/Team/TeamOne/TeamOne";
 import TeamTwo from "./../pages/Team/TeamTwo/TeamTwo";
 // import Files from "./../pages/Files/Files";
 import Report from "../pages/Report/Report";
-import Login from "../pages/Auth/Login";
+import Login from "../pages/Login";
 
-function Router({ isAuthenticated }) {
+function Router({ isAuthenticated, onLogin }) {
   const guard = (element) =>
     isAuthenticated ? element : <Navigate to="/login" replace />;
 
@@ -17,7 +17,11 @@ function Router({ isAuthenticated }) {
       <Route
         path="/login"
         element={
-          isAuthenticated ? <Navigate to="/report" replace /> : <Login />
+          isAuthenticated ? (
+            <Navigate to="/report" replace />
+          ) : (
+            <Login onLogin={onLogin} />
+          )
         }
       />
       <Route
@@ -44,6 +48,7 @@ function Router({ isAuthenticated }) {
 
 Router.propTypes = {
   isAuthenticated: PropTypes.bool.isRequired,
+  onLogin: PropTypes.func.isRequired,
 };
 
 export default Router;

@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Router from "./router";
+import { useAuth } from "./hooks/useAuth";
 const { Header, Content, Footer, Sider } = Layout;
 
 function getItem(label, key, icon, children) {
@@ -36,21 +37,17 @@ const App = () => {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
   const location = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => localStorage.getItem("fw_auth") === "1",
-  );
+  const { isAuthenticated, login, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const handleLogin = () => {
-    localStorage.setItem("fw_auth", "1");
-    setIsAuthenticated(true);
+  const handleLogin = async ({ identifier, password }) => {
+    await login({ identifier, password });
     navigate("/report", { replace: true });
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("fw_auth");
-    setIsAuthenticated(false);
+    logout();
     navigate("/login", { replace: true });
   };
 
@@ -60,21 +57,26 @@ const App = () => {
     }
   }, [location.pathname, isMobile]);
 
-  const menu = (
-    <Menu>
-      <Menu.Item key="0">
-        <Link to="/user/account">
-          <UserOutlined />
-          Profile
-        </Link>
-      </Menu.Item>
-      <Menu.Divider />
-      <Menu.Item key="1" onClick={handleLogout}>
-        <LogoutOutlined />
-        Logout
-      </Menu.Item>
-    </Menu>
-  );
+  const profileMenu = {
+    items: [
+      {
+        key: "profile",
+        icon: <UserOutlined />,
+        label: <Link to="/user/account">Profile</Link>,
+      },
+      { type: "divider" },
+      {
+        key: "logout",
+        icon: <LogoutOutlined />,
+        label: "Logout",
+      },
+    ],
+    onClick: ({ key }) => {
+      if (key === "logout") {
+        handleLogout();
+      }
+    },
+  };
 
   if (!isAuthenticated || location.pathname === "/login") {
     return <Router isAuthenticated={isAuthenticated} onLogin={handleLogin} />;
@@ -93,7 +95,7 @@ const App = () => {
           placement="left"
           width={240}
           closable={false}
-          bodyStyle={{ padding: 0, background: "white" }}
+          styles={{ body: { padding: 0, background: "white" } }}
         >
           <Menu
             theme="light"
@@ -188,7 +190,7 @@ const App = () => {
             </Avatar> */}
             <h3 className="brand">Hisobot</h3>
           </div>
-          <Dropdown overlay={menu} trigger={["click"]}>
+          <Dropdown menu={profileMenu} trigger={["click"]}>
             <a
               className="ant-dropdown-link"
               onClick={(e) => e.preventDefault()}

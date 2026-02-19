@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DownOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
 import {
   Button,
@@ -11,11 +11,18 @@ import {
   Modal,
   Row,
   Select,
+  Spin,
   Space,
   Table,
   Typography,
   message,
 } from "antd";
+import {
+  createReportApi,
+  deleteReportApi,
+  getReportsApi,
+  updateReportApi,
+} from "../../api/reports.api";
 import "./Report.css";
 
 const { Title, Text } = Typography;
@@ -23,66 +30,6 @@ const { Title, Text } = Typography;
 const STATUS_OPTIONS = ["Faol", "Jarayonda", "Faolsiz", "Yangi", "Yakunlangan"];
 const PAYMENT_TYPES = ["Naxt", "Perechislenie", "Karta"];
 const CURRENCY_OPTIONS = ["UZS", "USD"];
-
-const INITIAL_DATA = [
-  {
-    id: 1,
-    objectName: "Orion Market",
-    clientName: "Aliyev Aziz Anvarovich",
-    reportNumber: "1",
-    position: "Direktor",
-    address: "Toshkent shahar, Yunusobod tumani, Novza ko‘chasi 8 uy",
-    service: "Kamera o‘rnatish, Domofon o‘rnatish",
-    status: "Faol",
-    phone: "995486588",
-    note: "Kafolat 1 yil",
-    projectProducts:
-      "8 dona IP kuzatuv kamera (2MP / 4MP), 1 dona NVR videoregistrator (8 kanal), 1 dona HDD 2TB",
-    agreedPayment: "500$, 150$",
-    paidAmount: "220$,55$",
-    debt: "280$,95$",
-    dueDate: "15.03.2026",
-    paymentType: "Naxt",
-  },
-  {
-    id: 2,
-    objectName: "Green House",
-    clientName: "Karimova Dilnoza",
-    reportNumber: "2",
-    position: "Menejer",
-    address: "Toshkent shahar, Yashnobod tumani, Go‘zal ko‘chasi 125 uy",
-    service: "Domofon o‘rnatish",
-    status: "Jarayonda",
-    phone: "952147899",
-    note: "Kafolat 6 yil",
-    projectProducts:
-      "Video domofon monitor (7 dyuym), Tashqi chaqiruv paneli (kamera bilan), Elektr qulf (magnitli)",
-    agreedPayment: "5000000 so‘m",
-    paidAmount: "2500000 so‘m",
-    debt: "2500000 so‘m",
-    dueDate: "25.05.2026",
-    paymentType: "Perechislenie",
-  },
-  {
-    id: 3,
-    objectName: "Tech Office",
-    clientName: "Rasulov Bekzod Ilhom o‘g‘li",
-    reportNumber: "3",
-    position: "IT mutaxassisi",
-    address: "Toshkent shahar, Sergeli tumani, Chorag‘on ko‘chasi 77 uy",
-    service: "Turniket o‘rnatish, face-id o‘rnatish, wi-fi o‘rnatish",
-    status: "Faolsiz",
-    phone: "902548877",
-    note: "Xizmat yakunlanmagan",
-    projectProducts:
-      "Turniket qurilmasi (1 dona), Face-ID biometrik terminal, Kirish-chiqish nazorat moduli, Wi-Fi router (Dual Band)",
-    agreedPayment: "8000000 so‘m",
-    paidAmount: "6600000 so‘m",
-    debt: "1400000 so‘m",
-    dueDate: "18.04.2026",
-    paymentType: "Perechislenie",
-  },
-];
 
 const statusColor = {
   Yangi: { color: "#0958d9", background: "#e6f4ff", border: "#91caff" },
@@ -152,15 +99,111 @@ const splitAmountAndCurrency = (value) => {
   };
 };
 
+const parseNoteDetails = (value) => {
+  const parts = String(value || "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  let note = "";
+  let address = "";
+  let service = "";
+  let projectProducts = "";
+
+  parts.forEach((part) => {
+    const lower = part.toLowerCase();
+
+    if (lower.startsWith("manzil:")) {
+      address = part.replace(/^manzil:\s*/i, "").trim();
+      return;
+    }
+
+    if (lower.startsWith("xizmat:")) {
+      service = part.replace(/^xizmat:\s*/i, "").trim();
+      return;
+    }
+
+    if (lower.startsWith("mahsulotlar:")) {
+      projectProducts = part.replace(/^mahsulotlar:\s*/i, "").trim();
+      return;
+    }
+
+    note = note ? `${note} | ${part}` : part;
+  });
+
+  return { note, address, service, projectProducts };
+};
+
+const buildNoteDetails = ({ note, address, service, projectProducts }) => {
+  const chunks = [];
+
+  if (note) chunks.push(String(note).trim());
+  if (address) chunks.push(`Manzil: ${String(address).trim()}`);
+  if (service) chunks.push(`Xizmat: ${String(service).trim()}`);
+  if (projectProducts)
+    chunks.push(`Mahsulotlar: ${String(projectProducts).trim()}`);
+
+  return chunks.join(" | ");
+};
+
+const toAmountNumber = (value) => {
+  const number = Number(String(value || "").replace(/,/g, "."));
+  return Number.isFinite(number) ? number : 0;
+};
+
+const normalizeReport = (item) => {
+  const details = parseNoteDetails(item?.note);
+
+  return {
+    id: item?.id ?? item?._id,
+    objectName: item?.objectName || "",
+    clientName: item?.clientName || "",
+    reportNumber: item?.reportNumber || "",
+    position: item?.position || "",
+    address: item?.address || details.address,
+    service: item?.service || details.service,
+    status: item?.status || "Faol",
+    phone: item?.phone || "",
+    note: details.note || item?.note || "",
+    projectProducts: item?.projectProducts || details.projectProducts,
+    agreedPayment: String(item?.agreedPayment ?? ""),
+    paidAmount: String(item?.paidAmount ?? ""),
+    debt: String(item?.debt ?? ""),
+    dueDate: item?.dueDate || "",
+    paymentType: item?.paymentType || "Naxt",
+  };
+};
+
 function Report() {
   const screens = Grid.useBreakpoint();
   const isTabletOrMobile = !screens.lg;
   const [form] = Form.useForm();
-  const [records, setRecords] = useState(INITIAL_DATA);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [expandedMobileIds, setExpandedMobileIds] = useState([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+
+  useEffect(() => {
+    const loadRecords = async () => {
+      try {
+        setLoading(true);
+        const data = await getReportsApi();
+        setRecords(data.map(normalizeReport));
+      } catch {
+        message.error("Hisobotlarni yuklashda xatolik");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadRecords();
+
+    return () => {
+      setLoading(false);
+    };
+  }, []);
 
   const toggleMobileDetails = (id) => {
     setExpandedMobileIds((prev) =>
@@ -213,7 +256,8 @@ function Report() {
     setOpen(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
+    await deleteReportApi(id);
     setRecords((prev) => prev.filter((item) => item.id !== id));
     message.success("Yozuv o‘chirildi");
   };
@@ -224,7 +268,13 @@ function Report() {
       okText: "Ha",
       cancelText: "Yo‘q",
       okButtonProps: { danger: true },
-      onOk: () => handleDelete(record.id),
+      onOk: async () => {
+        try {
+          await handleDelete(record.id);
+        } catch {
+          message.error("O‘chirishda xatolik");
+        }
+      },
     });
   };
 
@@ -259,44 +309,48 @@ function Report() {
       setSaving(true);
       const values = await form.validateFields();
 
+      const agreedAmount = toAmountNumber(values.agreedPaymentValue);
+      const paidAmount = toAmountNumber(values.paidAmountValue);
+      const debtAmount = Math.max(agreedAmount - paidAmount, 0);
+
       const payload = {
-        ...values,
-        agreedPayment: values.agreedPaymentValue
-          ? `${values.agreedPaymentValue} ${values.agreedPaymentCurrency}`
-          : "",
-        paidAmount: values.paidAmountValue
-          ? `${values.paidAmountValue} ${values.paidAmountCurrency}`
-          : "",
-        debt: values.debtValue
-          ? `${values.debtValue} ${values.debtCurrency}`
-          : "",
+        objectName: values.objectName,
+        clientName: values.clientName,
+        reportNumber: values.reportNumber,
+        position: values.position,
+        status: values.status || "Faol",
+        phone: values.phone || "",
+        note: buildNoteDetails({
+          note: values.note,
+          address: values.address,
+          service: values.service,
+          projectProducts: values.projectProducts,
+        }),
+        agreedPayment: agreedAmount,
+        paidAmount,
+        debt: debtAmount,
+        dueDate: values.dueDate || "",
+        paymentType: values.paymentType || "Naxt",
       };
 
-      delete payload.agreedPaymentValue;
-      delete payload.agreedPaymentCurrency;
-      delete payload.paidAmountValue;
-      delete payload.paidAmountCurrency;
-      delete payload.debtValue;
-      delete payload.debtCurrency;
-
       if (editingRecord) {
-        setRecords((prev) =>
-          prev.map((item) =>
-            item.id === editingRecord.id ? { ...item, ...payload } : item,
-          ),
-        );
+        await updateReportApi(editingRecord.id, payload);
         message.success("Yozuv yangilandi");
       } else {
-        const nextId = records.length
-          ? Math.max(...records.map((item) => item.id)) + 1
-          : 1;
-        setRecords((prev) => [...prev, { id: nextId, ...payload }]);
+        await createReportApi(payload);
         message.success("Yangi yozuv qo‘shildi");
       }
+
+      const updatedData = await getReportsApi();
+      setRecords(updatedData.map(normalizeReport));
 
       setOpen(false);
       setEditingRecord(null);
       form.resetFields();
+    } catch (error) {
+      if (!error?.errorFields) {
+        message.error("Saqlashda xatolik");
+      }
     } finally {
       setSaving(false);
     }
@@ -399,106 +453,115 @@ function Report() {
       </Row>
 
       {isTabletOrMobile ? (
-        <div className="mobile-report-list">
-          {records.map((item) => (
-            <Card key={item.id} className="mobile-report-card">
-              {(() => {
-                const isExpanded = expandedMobileIds.includes(item.id);
+        loading ? (
+          <Card className="report-card-shell">
+            <div className="report-loading-wrap">
+              <Spin size="large" />
+            </div>
+          </Card>
+        ) : (
+          <div className="mobile-report-list">
+            {records.map((item) => (
+              <Card key={item.id} className="mobile-report-card">
+                {(() => {
+                  const isExpanded = expandedMobileIds.includes(item.id);
 
-                return (
-                  <>
-                    <div className="mobile-report-head">
-                      <Title level={5} style={{ margin: 0 }}>
-                        {item.objectName}
-                      </Title>
-                      <div className="mobile-report-head-right">
-                        {renderStatusPill(item.status)}
-                        {renderActionMenu(item)}
+                  return (
+                    <>
+                      <div className="mobile-report-head">
+                        <Title level={5} style={{ margin: 0 }}>
+                          {item.objectName}
+                        </Title>
+                        <div className="mobile-report-head-right">
+                          {renderStatusPill(item.status)}
+                          {renderActionMenu(item)}
+                        </div>
                       </div>
-                    </div>
 
-                    <Space
-                      direction="vertical"
-                      size={5}
-                      style={{ width: "100%" }}
-                    >
-                      <Text>
-                        <strong>Mijoz:</strong> {item.clientName}
-                      </Text>
-                      <Text>
-                        <strong>Hisobot raqami:</strong> {item.reportNumber}
-                      </Text>
-                      <Text>
-                        <strong>Lavozimi:</strong> {item.position}
-                      </Text>
-                      <Text>
-                        <strong>Tel:</strong> {item.phone}
-                      </Text>
-                      <Text>
-                        <strong>Kelishilgan to‘lov:</strong>{" "}
-                        {item.agreedPayment}
-                      </Text>
-                      <Text>
-                        <strong>To‘langan summa:</strong> {item.paidAmount}
-                      </Text>
-                      <Text>
-                        <strong>Qarzdorlik:</strong> {item.debt}
-                      </Text>
-                      <Text>
-                        <strong>To‘lov sanasi:</strong> {item.dueDate}
-                      </Text>
-                    </Space>
-
-                    <Button
-                      type="text"
-                      size="small"
-                      className="mobile-details-toggle"
-                      icon={isExpanded ? <DownOutlined /> : <RightOutlined />}
-                      onClick={() => toggleMobileDetails(item.id)}
-                    >
-                      {isExpanded ? "Yig‘ish" : "To‘liq ko‘rish"}
-                    </Button>
-
-                    {isExpanded ? (
                       <Space
                         direction="vertical"
                         size={5}
                         style={{ width: "100%" }}
-                        className="mobile-full-details"
                       >
                         <Text>
-                          <strong>ID:</strong> {item.id}
+                          <strong>Mijoz:</strong> {item.clientName}
                         </Text>
                         <Text>
-                          <strong>Manzil:</strong> {item.address}
+                          <strong>Hisobot raqami:</strong> {item.reportNumber}
                         </Text>
                         <Text>
-                          <strong>Xizmat:</strong> {item.service}
+                          <strong>Lavozimi:</strong> {item.position}
                         </Text>
                         <Text>
-                          <strong>Izoh:</strong> {item.note}
+                          <strong>Tel:</strong> {item.phone}
                         </Text>
                         <Text>
-                          <strong>Loyiha bo‘yicha mahsulotlar nomi:</strong>{" "}
-                          {item.projectProducts}
+                          <strong>Kelishilgan to‘lov:</strong>{" "}
+                          {item.agreedPayment}
                         </Text>
                         <Text>
-                          <strong>To‘lov turi:</strong> {item.paymentType}
+                          <strong>To‘langan summa:</strong> {item.paidAmount}
+                        </Text>
+                        <Text>
+                          <strong>Qarzdorlik:</strong> {item.debt}
+                        </Text>
+                        <Text>
+                          <strong>To‘lov sanasi:</strong> {item.dueDate}
                         </Text>
                       </Space>
-                    ) : null}
-                  </>
-                );
-              })()}
-            </Card>
-          ))}
-        </div>
+
+                      <Button
+                        type="text"
+                        size="small"
+                        className="mobile-details-toggle"
+                        icon={isExpanded ? <DownOutlined /> : <RightOutlined />}
+                        onClick={() => toggleMobileDetails(item.id)}
+                      >
+                        {isExpanded ? "Yig‘ish" : "To‘liq ko‘rish"}
+                      </Button>
+
+                      {isExpanded ? (
+                        <Space
+                          direction="vertical"
+                          size={5}
+                          style={{ width: "100%" }}
+                          className="mobile-full-details"
+                        >
+                          <Text>
+                            <strong>ID:</strong> {item.id}
+                          </Text>
+                          <Text>
+                            <strong>Manzil:</strong> {item.address}
+                          </Text>
+                          <Text>
+                            <strong>Xizmat:</strong> {item.service}
+                          </Text>
+                          <Text>
+                            <strong>Izoh:</strong> {item.note}
+                          </Text>
+                          <Text>
+                            <strong>Loyiha bo‘yicha mahsulotlar nomi:</strong>{" "}
+                            {item.projectProducts}
+                          </Text>
+                          <Text>
+                            <strong>To‘lov turi:</strong> {item.paymentType}
+                          </Text>
+                        </Space>
+                      ) : null}
+                    </>
+                  );
+                })()}
+              </Card>
+            ))}
+          </div>
+        )
       ) : (
         <Card className="report-card-shell" bodyStyle={{ padding: 0 }}>
           <Table
             rowKey="id"
             columns={columns}
             dataSource={records}
+            loading={loading}
             pagination={false}
             expandable={{
               expandedRowRender,
