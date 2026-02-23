@@ -1,6 +1,7 @@
 import axios from "axios";
 
-export const API_BASE_URL = "http://localhost:4010";
+export const API_BASE_URL =
+  import.meta.env.VITE_SERVER_URL || "http://localhost:4010";
 export const TOKEN_STORAGE_KEY = "fw_token";
 export const USER_STORAGE_KEY = "fw_user";
 

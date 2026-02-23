@@ -280,7 +280,8 @@ function Users() {
             + Foydalanuvchi qo‘shish
           </Button>
         </div>
-
+      </Card>
+      <div>
         {isTabletOrMobile ? (
           loading ? (
             <div
@@ -446,7 +447,7 @@ function Users() {
             </Row>
           </Form>
         </Modal>
-      </Card>
+      </div>
     </div>
   );
 }

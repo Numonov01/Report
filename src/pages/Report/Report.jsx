@@ -510,16 +510,6 @@ function Report() {
                         </Text>
                       </Space>
 
-                      <Button
-                        type="text"
-                        size="small"
-                        className="mobile-details-toggle"
-                        icon={isExpanded ? <DownOutlined /> : <RightOutlined />}
-                        onClick={() => toggleMobileDetails(item.id)}
-                      >
-                        {isExpanded ? "Yig‘ish" : "To‘liq ko‘rish"}
-                      </Button>
-
                       {isExpanded ? (
                         <Space
                           direction="vertical"
@@ -548,6 +538,16 @@ function Report() {
                           </Text>
                         </Space>
                       ) : null}
+
+                      <Button
+                        type="text"
+                        size="small"
+                        className="mobile-details-toggle"
+                        icon={isExpanded ? <DownOutlined /> : <RightOutlined />}
+                        onClick={() => toggleMobileDetails(item.id)}
+                      >
+                        {isExpanded ? "Yig‘ish" : "To‘liq ko‘rish"}
+                      </Button>
                     </>
                   );
                 })()}

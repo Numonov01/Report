@@ -1,16 +1,23 @@
-import { useEffect, useState } from "react";
-import { Layout, Menu, Avatar, Dropdown, Button, Drawer, Grid } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { Layout, Menu, Avatar, Dropdown, Button, Grid } from "antd";
 import {
+  AppstoreOutlined,
   LogoutOutlined,
   // FileOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   RedEnvelopeOutlined,
+  // SettingOutlined,
+  TeamOutlined,
   UserOutlined,
+  FilePdfOutlined,
 } from "@ant-design/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Router from "./router";
 import { useAuth } from "./hooks/useAuth";
+import { API_BASE_URL, USER_STORAGE_KEY } from "./api/axios";
+import { getAccountMeApi } from "./api/account.api";
+import "./App.css";
 const { Header, Content, Footer, Sider } = Layout;
 
 function getItem(label, key, icon, children) {
@@ -24,6 +31,11 @@ function getItem(label, key, icon, children) {
 
 const items = [
   getItem(<Link to={"/report"}>Report</Link>, "5", <RedEnvelopeOutlined />),
+  getItem(
+    <Link to={"/instruments"}>Uskunalar</Link>,
+    "6",
+    <AppstoreOutlined />,
+  ),
   // getItem(<Link to={"/Files"}>Files</Link>, "11", <FileOutlined />),
 
   getItem("User", "sub1", <UserOutlined />, [
@@ -32,14 +44,39 @@ const items = [
   ]),
 ];
 
+const canAccessUsersPage = (role) => {
+  const normalizedRole = String(role || "").toLowerCase();
+  return normalizedRole === "admin" || normalizedRole === "boss";
+};
+
+const resolveAvatarUrl = (value) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const raw = String(value).trim();
+  const normalizedRaw = raw.replace(/\\/g, "/");
+
+  if (
+    normalizedRaw.startsWith("http://") ||
+    normalizedRaw.startsWith("https://") ||
+    normalizedRaw.startsWith("blob:") ||
+    normalizedRaw.startsWith("data:")
+  ) {
+    return normalizedRaw;
+  }
+
+  return `${API_BASE_URL}${normalizedRaw.startsWith("/") ? "" : "/"}${normalizedRaw}`;
+};
+
 const App = () => {
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
   const location = useLocation();
-  const { isAuthenticated, login, logout } = useAuth();
+  const { isAuthenticated, login, logout, user, setUser } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const avatarSyncAttemptedForRef = useRef(null);
 
   const handleLogin = async ({ identifier, password }) => {
     await login({ identifier, password });
@@ -51,11 +88,92 @@ const App = () => {
     navigate("/login", { replace: true });
   };
 
+  const userAvatarSrc = resolveAvatarUrl(
+    user?.avatarUrl ||
+      user?.avatar ||
+      user?.url ||
+      user?.avatarPath ||
+      user?.profileImage,
+  );
+
+  const menuItems = canAccessUsersPage(user?.role)
+    ? items
+    : [
+        getItem(
+          <Link to={"/report"}>Report</Link>,
+          "5",
+          <RedEnvelopeOutlined />,
+        ),
+        getItem(
+          <Link to={"/instruments"}>Uskunalar</Link>,
+          "6",
+          <AppstoreOutlined />,
+        ),
+        getItem("User", "sub1", <UserOutlined />, [
+          getItem(<Link to={"/user/account"}>Akkaunt</Link>, "32"),
+        ]),
+      ];
+
   useEffect(() => {
-    if (isMobile) {
-      setMobileNavOpen(false);
+    const hasAvatar = Boolean(
+      user?.avatarUrl ||
+      user?.avatar ||
+      user?.url ||
+      user?.avatarPath ||
+      user?.profileImage,
+    );
+
+    const userSyncKey =
+      user?.id || user?._id || user?.email || user?.phone || "anonymous";
+
+    if (!isAuthenticated || hasAvatar) {
+      if (!isAuthenticated) {
+        avatarSyncAttemptedForRef.current = null;
+      }
+      return;
     }
-  }, [location.pathname, isMobile]);
+
+    if (avatarSyncAttemptedForRef.current === userSyncKey) {
+      return;
+    }
+
+    avatarSyncAttemptedForRef.current = userSyncKey;
+
+    let cancelled = false;
+
+    const syncMe = async () => {
+      try {
+        const me = await getAccountMeApi();
+        if (cancelled || !me) {
+          return;
+        }
+
+        const mergedUser = { ...me };
+        setUser(mergedUser);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mergedUser));
+      } catch {
+        // noop
+      }
+    };
+
+    syncMe();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAuthenticated,
+    setUser,
+    user?._id,
+    user?.avatar,
+    user?.avatarPath,
+    user?.avatarUrl,
+    user?.email,
+    user?.id,
+    user?.phone,
+    user?.profileImage,
+    user?.url,
+  ]);
 
   const profileMenu = {
     items: [
@@ -78,8 +196,71 @@ const App = () => {
     },
   };
 
+  const canSeeUsersTab = canAccessUsersPage(user?.role);
+
+  const mobileTabs = [
+    {
+      key: "report",
+      label: "Hisobot",
+      to: "/report",
+      icon: <FilePdfOutlined style={{ fontSize: 22 }} />,
+    },
+    {
+      key: "instruments",
+      label: "Uskunalar",
+      to: "/instruments",
+      icon: <AppstoreOutlined style={{ fontSize: 22 }} />,
+    },
+    ...(canSeeUsersTab
+      ? [
+          {
+            key: "users",
+            label: "Kontaktlar",
+            to: "/user/users",
+            icon: <TeamOutlined style={{ fontSize: 22 }} />,
+          },
+        ]
+      : []),
+    // {
+    //   key: "sozlamalar",
+    //   label: "Sozlamalar",
+    //   to: "/TeamOne",
+    //   icon: <SettingOutlined style={{ fontSize: 22 }} />,
+    // },
+    {
+      key: "profil",
+      label: "Profil",
+      to: "/user/account",
+      icon: <Avatar src={userAvatarSrc} icon={<UserOutlined />} size={26} />,
+    },
+  ];
+
+  const getActiveMobileTabKey = () => {
+    if (location.pathname.startsWith("/user/account")) {
+      return "profil";
+    }
+    if (location.pathname.startsWith("/instruments")) {
+      return "instruments";
+    }
+    if (location.pathname.startsWith("/user/users")) {
+      return "users";
+    }
+    if (location.pathname.startsWith("/TeamOne")) {
+      return "sozlamalar";
+    }
+    return "report";
+  };
+
+  const activeMobileTabKey = getActiveMobileTabKey();
+
   if (!isAuthenticated || location.pathname === "/login") {
-    return <Router isAuthenticated={isAuthenticated} onLogin={handleLogin} />;
+    return (
+      <Router
+        isAuthenticated={isAuthenticated}
+        onLogin={handleLogin}
+        userRole={user?.role}
+      />
+    );
   }
 
   return (
@@ -88,25 +269,7 @@ const App = () => {
         minHeight: "100vh",
       }}
     >
-      {isMobile ? (
-        <Drawer
-          open={mobileNavOpen}
-          onClose={() => setMobileNavOpen(false)}
-          placement="left"
-          width={240}
-          closable={false}
-          styles={{ body: { padding: 0, background: "white" } }}
-        >
-          <Menu
-            theme="light"
-            defaultSelectedKeys={["1"]}
-            mode="inline"
-            style={{ height: "100%" }}
-            items={items}
-            onClick={() => setMobileNavOpen(false)}
-          />
-        </Drawer>
-      ) : (
+      {!isMobile ? (
         <Sider
           collapsible
           breakpoint="lg"
@@ -127,10 +290,10 @@ const App = () => {
             defaultSelectedKeys={["1"]}
             mode="inline"
             style={{ position: "sticky", top: 0 }}
-            items={items}
+            items={menuItems}
           />
         </Sider>
-      )}
+      ) : null}
 
       <Layout>
         <Header
@@ -152,31 +315,17 @@ const App = () => {
               alignItems: "center",
             }}
           >
-            <Button
-              type="text"
-              onClick={() => {
-                if (isMobile) {
-                  setMobileNavOpen((prev) => !prev);
-                  return;
-                }
-                setCollapsed((prev) => !prev);
-              }}
-              icon={
-                isMobile ? (
-                  mobileNavOpen ? (
-                    <MenuFoldOutlined />
-                  ) : (
-                    <MenuUnfoldOutlined />
-                  )
-                ) : collapsed ? (
-                  <MenuUnfoldOutlined />
-                ) : (
-                  <MenuFoldOutlined />
-                )
-              }
-              style={{ marginRight: 6 }}
-              aria-label="Menyuni ochish yoki yopish"
-            />
+            {!isMobile ? (
+              <Button
+                type="text"
+                onClick={() => {
+                  setCollapsed((prev) => !prev);
+                }}
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                style={{ marginRight: 6 }}
+                aria-label="Menyuni ochish yoki yopish"
+              />
+            ) : null}
             <img
               src="../firewall.png"
               alt="icon"
@@ -200,23 +349,53 @@ const App = () => {
                 fontSize: 18,
               }}
             >
-              <Avatar src="../Boy.png" size={50} />
+              <Avatar src={userAvatarSrc} icon={<UserOutlined />} size={50} />
               {/* Profile */}
             </a>
           </Dropdown>
         </Header>
-        <Content style={{ background: "#EBEDF0", borderRadius: 8 }}>
-          <Router isAuthenticated={isAuthenticated} onLogin={handleLogin} />
-        </Content>
-        <Footer
+        <Content
           style={{
-            textAlign: "center",
-            background: "#fff",
-            height: 50,
+            background: "#EBEDF0",
+            borderRadius: 8,
+            paddingBottom: isMobile ? 84 : 0,
           }}
         >
-          Hisobot ©{new Date().getFullYear()}
-        </Footer>
+          <Router
+            isAuthenticated={isAuthenticated}
+            onLogin={handleLogin}
+            userRole={user?.role}
+          />
+        </Content>
+        {!isMobile ? (
+          <Footer
+            style={{
+              textAlign: "center",
+              background: "#fff",
+              height: 50,
+            }}
+          >
+            Hisobot ©{new Date().getFullYear()}
+          </Footer>
+        ) : null}
+        {isMobile ? (
+          <nav className="mobile-bottom-nav" aria-label="Mobil navigatsiya">
+            {mobileTabs.map((tab) => {
+              const isActive = activeMobileTabKey === tab.key;
+
+              return (
+                <Link
+                  key={tab.key}
+                  to={tab.to}
+                  className={`mobile-bottom-nav__item ${isActive ? "is-active" : ""}`}
+                >
+                  <span className="mobile-bottom-nav__icon">{tab.icon}</span>
+                  <span className="mobile-bottom-nav__label">{tab.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
       </Layout>
     </Layout>
   );
